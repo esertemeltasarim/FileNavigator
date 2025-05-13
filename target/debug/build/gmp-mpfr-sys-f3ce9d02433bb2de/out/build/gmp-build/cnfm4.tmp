@@ -1,4 +1,0 @@
-define(<CONFIG_TOP_SRCDIR>,<`../../gmp-src'>)
-define(<WANT_ASSERT>,0)
-define(<WANT_PROFILING>,<`no'>)
-define(<WANT_FAT_BINARY>, <yes>)

@@ -1,0 +1,217 @@
+#![windows_subsystem = "windows"]
+
+use native_windows_derive::NwgUi;
+use native_windows_gui as nwg;
+use std::{cell::RefCell, path::PathBuf};
+use serde::{Deserialize, Serialize};
+
+// ==================== INTERNATIONALIZATION MODULE ====================
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Translations {
+    pub window_title: String,
+    pub encrypt_tab: String,
+    pub decrypt_tab: String,
+    pub input_file_label: String,
+    pub output_file_label: String,
+    pub browse_button: String,
+    pub seed_label: String,
+    pub language_label: String,
+    pub english: String,
+    pub turkish: String,
+}
+
+impl Default for Translations {
+    fn default() -> Self {
+        Self::english()
+    }
+}
+
+impl Translations {
+    pub fn english() -> Self {
+        Translations {
+            window_title: "Transcendental Encryption Tool".to_string(),
+            encrypt_tab: "Encrypt".to_string(),
+            decrypt_tab: "Decrypt".to_string(),
+            input_file_label: "Input File:".to_string(),
+            output_file_label: "Output File:".to_string(),
+            browse_button: "Browse...".to_string(),
+            seed_label: "Password/Seed:".to_string(),
+            language_label: "Language:".to_string(),
+            english: "English".to_string(),
+            turkish: "Turkish".to_string(),
+        }
+    }
+
+    pub fn turkish() -> Self {
+        Translations {
+            window_title: "Aşkın Şifreleme Aracı".to_string(),
+            encrypt_tab: "Şifrele".to_string(),
+            decrypt_tab: "Şifre Çöz".to_string(),
+            input_file_label: "Girdi Dosyası:".to_string(),
+            output_file_label: "Çıktı Dosyası:".to_string(),
+            browse_button: "Gözat...".to_string(),
+            seed_label: "Parola/Tohum:".to_string(),
+            language_label: "Dil:".to_string(),
+            english: "İngilizce".to_string(),
+            turkish: "Türkçe".to_string(),
+        }
+    }
+}
+
+// ==================== GUI MODULE ====================
+
+#[derive(Default, NwgUi)]
+pub struct TranscendentalCryptoApp {
+    // Application data
+    translations: RefCell<Translations>,
+    current_language: RefCell<String>,
+    
+    // Main window
+    #[nwg_control(size: (500, 400), position: (300, 300), title: "Transcendental Encryption Tool", flags: "WINDOW|VISIBLE")]
+    #[nwg_events(OnWindowClose: [TranscendentalCryptoApp::exit])]
+    window: nwg::Window,
+
+    #[nwg_control(parent: window, position: (10, 10), size: (480, 350), flags: "VISIBLE")]
+    tab_control: nwg::TabsContainer,
+
+    // Encrypt tab
+    #[nwg_control(parent: tab_control, text: "Encrypt")]
+    tab_encrypt: nwg::Tab,
+
+    // Input file for encryption
+    #[nwg_control(parent: tab_encrypt, text: "Input File:", position: (10, 20), size: (90, 20))]
+    static_input_file_enc: nwg::Label,
+    
+    #[nwg_control(parent: tab_encrypt, text: "", position: (100, 20), size: (290, 20))]
+    edit_input_file_enc: nwg::TextInput,
+    
+    #[nwg_control(parent: tab_encrypt, text: "Browse...", position: (400, 20), size: (80, 20))]
+    button_browse_input_enc: nwg::Button,
+    
+    // Output file for encryption
+    #[nwg_control(parent: tab_encrypt, text: "Output File:", position: (10, 50), size: (90, 20))]
+    static_output_file_enc: nwg::Label,
+    
+    #[nwg_control(parent: tab_encrypt, text: "", position: (100, 50), size: (290, 20))]
+    edit_output_file_enc: nwg::TextInput,
+    
+    #[nwg_control(parent: tab_encrypt, text: "Browse...", position: (400, 50), size: (80, 20))]
+    button_browse_output_enc: nwg::Button,
+    
+    // Seed/password for encryption
+    #[nwg_control(parent: tab_encrypt, text: "Password/Seed:", position: (10, 80), size: (90, 20))]
+    static_seed_enc: nwg::Label,
+    
+    #[nwg_control(parent: tab_encrypt, text: "", position: (100, 80), size: (290, 20), flags: "VISIBLE|PASSWORD")]
+    edit_seed_enc: nwg::TextInput,
+
+    // Decrypt tab
+    #[nwg_control(parent: tab_control, text: "Decrypt")]
+    tab_decrypt: nwg::Tab,
+
+    // Settings area (common for both tabs)
+    #[nwg_control(parent: window, text: "Language:", position: (10, 365), size: (70, 20))]
+    static_language: nwg::Label,
+    
+    #[nwg_control(parent: window, position: (80, 365), size: (100, 20), collection: vec!["English", "Turkish"], selected_index: Some(0))]
+    #[nwg_events(OnComboxBoxSelection: [TranscendentalCryptoApp::change_language])]
+    combo_language: nwg::ComboBox<&'static str>,
+
+    // Open file dialogs
+    #[nwg_resource(title: "Select Input File", action: nwg::FileDialogAction::Open, filters: "All Files (*.*)|*.*")]
+    file_dialog_input: nwg::FileDialog,
+
+    #[nwg_resource(title: "Select Output File", action: nwg::FileDialogAction::Save, filters: "All Files (*.*)|*.*")]
+    file_dialog_output: nwg::FileDialog,
+}
+
+impl TranscendentalCryptoApp {
+    fn exit(&self) {
+        nwg::stop_thread_dispatch();
+    }
+    
+    fn change_language(&self) {
+        let lang = match self.combo_language.selection_string() {
+            Some(lang) => {
+                if lang == "Turkish" || lang == "Türkçe" {
+                    "tr"
+                } else {
+                    "en"
+                }
+            },
+            None => "en",
+        };
+        
+        // Update UI language
+        let translations = if lang == "tr" {
+            Translations::turkish()
+        } else {
+            Translations::english()
+        };
+        
+        // Update current language
+        *self.current_language.borrow_mut() = lang.to_string();
+        
+        // Update UI texts
+        self.update_ui_texts(&translations);
+        
+        // Store translations for future use
+        *self.translations.borrow_mut() = translations;
+    }
+    
+    fn update_ui_texts(&self, translations: &Translations) {
+        // Update window and tab titles
+        self.window.set_text(&translations.window_title);
+        self.tab_encrypt.set_text(&translations.encrypt_tab);
+        self.tab_decrypt.set_text(&translations.decrypt_tab);
+        
+        // Update encrypt tab
+        self.static_input_file_enc.set_text(&translations.input_file_label);
+        self.static_output_file_enc.set_text(&translations.output_file_label);
+        self.button_browse_input_enc.set_text(&translations.browse_button);
+        self.button_browse_output_enc.set_text(&translations.browse_button);
+        self.static_seed_enc.set_text(&translations.seed_label);
+        
+        // Update settings area
+        self.static_language.set_text(&translations.language_label);
+        
+        // Update language combo box
+        let current_lang = self.current_language.borrow().clone();
+        self.combo_language.set_collection(vec![
+            &translations.english,
+            &translations.turkish,
+        ]);
+        
+        let selected_index = if current_lang == "tr" { 1 } else { 0 };
+        self.combo_language.set_selection(Some(selected_index));
+    }
+    
+    fn init(&self) {
+        // Default to English
+        let translations = Translations::english();
+        let lang = "en";
+        
+        // Save current language
+        *self.current_language.borrow_mut() = lang.to_string();
+        
+        // Update UI with the loaded translations
+        self.update_ui_texts(&translations);
+        
+        // Store translations for future use
+        *self.translations.borrow_mut() = translations;
+    }
+}
+
+// ==================== MAIN FUNCTION ====================
+
+fn main() {
+    nwg::init().expect("Failed to initialize native windows GUI");
+    
+    let app = TranscendentalCryptoApp::build_ui(Default::default()).expect("Failed to build UI");
+    
+    // Initialize the app with the correct language
+    app.init();
+    
+    nwg::dispatch_thread_events();
+}
