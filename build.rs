@@ -5,21 +5,9 @@ fn main() {
     #[cfg(target_os = "windows")]
     {
         // This embeds application metadata in the Windows executable
-        embed_resource::compile("windows-resources.rc", &[] as &[&str]);
-    }
-    
-    // These flags ensure static linking for portability on Windows
-    #[cfg(target_os = "windows")]
-    {
-        println!("cargo:rustc-link-arg=/NODEFAULTLIB:libcmt");
-        println!("cargo:rustc-link-arg=/NODEFAULTLIB:msvcrt");
-        println!("cargo:rustc-link-arg=/NODEFAULTLIB:msvcrtd");
+        embed_resource::compile("windows-resources.rc");
         
-        // Use static CRT
+        // Enable static linking for Windows
         println!("cargo:rustc-link-arg=-static");
-        println!("cargo:rustc-link-search=native=.");
     }
-    
-    // Set environment variable to help with cross-compilation
-    println!("cargo:rustc-env=GMP_MPFR_SYS_CACHE=1");
 }

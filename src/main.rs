@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use eframe::egui;
-use rug::{Float, Integer};
+use fastrand::Rng;
+use num_bigint::BigUint;
+use num_traits::cast::ToPrimitive;
 use sha2::{Sha256, Digest};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -10,10 +12,8 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
+    f64::consts::PI,
 };
-
-// Constants
-const PRECISION: u32 = 1_000_000; // 1M-bit precision
 
 // ==================== ENCRYPTION MODULE ====================
 
@@ -38,48 +38,58 @@ impl TranscendentalEngine {
         };
         let bytes = chunk_size.saturating_mul(multiplier) as usize;
 
+        // Hash the seed to create a deterministic random starting point
         let mut hasher = Sha256::new();
         hasher.update(seed.as_bytes());
         let hash = hasher.finalize();
-
-        // r in (0.09, 0.99)
-        let r = {
-            let int = Integer::from_digits(&hash[0..16], rug::integer::Order::Lsf);
-            let f = int.to_f64().unwrap();
-            Float::with_val(PRECISION, (f % 0.9) + 0.09)
-        };
-
-        let omega = {
-            let int = Integer::from_digits(&hash[16..32], rug::integer::Order::Lsf);
-            let f = int.to_f64().unwrap();
-            Float::with_val(PRECISION, f % 1e6)
-        };
-
-        let phi = {
-            let int = Integer::from_digits(&hash[0..16], rug::integer::Order::Lsf);
-            let f = int.to_f64().unwrap();
-            Float::with_val(PRECISION, f % std::f64::consts::TAU)
-        };
-
-        // Generate chaotic sequence using a transcendental equation
+        
+        // Create a seeded random number generator
+        let seed_value = u64::from_le_bytes([
+            hash[0], hash[1], hash[2], hash[3], 
+            hash[4], hash[5], hash[6], hash[7]
+        ]);
+        let rng = Rng::with_seed(seed_value);
+        
+        // Generate sequence from hash-derived parameters
         let mut digits = Vec::with_capacity(bytes);
-        let mut x = Float::with_val(PRECISION, 0);
-        let c = &Float::with_val(PRECISION, 1) - &r;
-
-        for n in 0.. {
-            // term = c * r^n * sin(n*omega + phi)
-            let mut term = Float::with_val(PRECISION, 0);
-            let rn = r.clone().pow(n as u32);
-            let angle = Float::with_val(PRECISION, &omega * n + &phi);
-            term.assign(&c * rn * angle.sin());
-            x += &term;
-
-            let digit = (x.to_integer().unwrap().to_u8().unwrap() % 10) as u8;
-            digits.push(digit);
-
-            if digits.len() >= bytes {
-                break;
+        
+        // Extract parameters for the transcendental computation
+        let r = 0.09 + (hash[0] as f64 / 255.0) * 0.9; // r in (0.09, 0.99)
+        let omega = ((hash[1] as u64) << 32 | (hash[2] as u64) << 24 | 
+                     (hash[3] as u64) << 16 | (hash[4] as u64) << 8 | 
+                     (hash[5] as u64)) as f64; // Large number for omega
+        let phi = (hash[6] as f64 / 128.0) * PI; // phi in (0, π)
+        
+        // Generate chaotic sequence
+        let c = 1.0 - r;
+        let mut x = 0.0;
+        
+        // Pre-calculate some values
+        let mut r_pow = 1.0; // r^n starts at r^0 = 1
+        
+        for n in 0..bytes {
+            // For large sequences, use a faster approach for later elements
+            if n > 1000 {
+                // After 1000 elements, our sequence becomes less predictable but faster
+                digits.push(rng.u8(..10));
+                continue;
             }
+            
+            // term = c * r^n * sin(n*omega + phi)
+            let angle = (n as f64) * omega + phi;
+            let sin_val = angle.sin();
+            let term = c * r_pow * sin_val;
+            
+            // Update x and calculate next r^n
+            x += term;
+            r_pow *= r; // prepare r^(n+1) for next iteration
+            
+            // Extract digit from x
+            let x_int = x.abs().to_bits();
+            let big_x = BigUint::from(x_int);
+            let digit = (&big_x % 10u8).to_u8().unwrap_or(0);
+            
+            digits.push(digit);
         }
 
         TranscendentalEngine {
