@@ -1,0 +1,91 @@
+name: Build Portable Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: ['v*']
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Install MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+      
+      - name: Setup LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "15.0"
+          
+      - name: Build release binary
+        run: |
+          $Env:RUSTFLAGS="-Ctarget-feature=+crt-static" 
+          cargo build --release --features static --target x86_64-pc-windows-msvc
+        
+      - name: Check executable size
+        run: |
+          Get-Item target/x86_64-pc-windows-msvc/release/transcendental_crypto.exe | Format-List Name, Length
+      
+      - name: Package Windows executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          Copy-Item -Path "target/x86_64-pc-windows-msvc/release/transcendental_crypto.exe" -Destination "release/TranscendentalCrypto.exe"
+          
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: transcendental-crypto-windows
+          path: release/TranscendentalCrypto.exe
+          
+  create-release:
+    needs: [build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for creating releases
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: transcendental-crypto-windows
+          path: windows
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            windows/TranscendentalCrypto.exe
+          name: "Transcendental Crypto v${{ github.ref_name }}"
+          body: |
+            # Transcendental Encryption Tool ${{ github.ref_name }}
+            
+            Portable encryption/decryption utility using transcendental algorithms.
+            
+            ## Features:
+            - Bilingual interface (Turkish/English)
+            - Strong encryption using transcendental calculations
+            - Simple and intuitive user interface
+            - No installation required (portable executable)
+            
+            ## Usage:
+            - Download the executable
+            - Run it directly (no installation needed)
+            - Select encrypt or decrypt mode
+            - Choose files to process
+            
+            Built with ❤️ using Rust and egui
+          draft: false
+          prerelease: false
