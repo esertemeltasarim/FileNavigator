@@ -1,0 +1,28 @@
+[package]
+name = "transcendental_crypto"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name"]
+
+[dependencies]
+native-windows-gui = "1.0.13"
+native-windows-derive = "1.0.5"
+sha2 = "0.10.7"
+rug = "1.20.0"
+dirs = "5.0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = "4.5.38"
+indicatif = "0.17.11"
+embed-resource = "2.3"
+dialoguer = "0.11.0"
+
+[build-dependencies]
+embed-resource = "2.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

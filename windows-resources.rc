@@ -1,0 +1,27 @@
+#define IDI_ICON 0x101
+
+IDI_ICON ICON "transcendental.ico"
+
+1 VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080904E4"
+        BEGIN
+            VALUE "CompanyName", "Your Company"
+            VALUE "FileDescription", "Transcendental Encryption Tool"
+            VALUE "FileVersion", "1.0.0"
+            VALUE "InternalName", "transcendental_crypto"
+            VALUE "LegalCopyright", "Copyright © 2023"
+            VALUE "OriginalFilename", "transcendental_crypto.exe"
+            VALUE "ProductName", "Transcendental Encryption Tool"
+            VALUE "ProductVersion", "1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x809, 1252
+    END
+END

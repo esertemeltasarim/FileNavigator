@@ -1,0 +1,40 @@
+modules = ["rust"]
+
+[nix]
+channel = "stable-24_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Build and Run Transcendental Crypto"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "rust_application"
+
+[[workflows.workflow]]
+name = "Build and Run Transcendental Crypto"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cargo run --release"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "rust_application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cargo run"
+
+[deployment]
+run = ["sh", "-c", "cargo run --release"]
