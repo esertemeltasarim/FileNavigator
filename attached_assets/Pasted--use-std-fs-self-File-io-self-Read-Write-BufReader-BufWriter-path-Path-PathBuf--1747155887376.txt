@@ -1,0 +1,47 @@
+
+use std::{ fs::{self, File}, io::{self, Read, Write, BufReader, BufWriter}, path::{Path, PathBuf}, process, io::Cursor, }; use clap::{Parser, Subcommand, ValueEnum}; use dialoguer::{Confirm}; use indicatif::{ProgressBar, ProgressStyle}; use rug::{Float, Integer}; use sha2::{Sha256, Digest};
+
+const PRECISION: u32 = 1_000_000; // 1M-bit hassasiyet
+
+#[derive(Parser)] #[command(author, version, about)] struct Cli { #[command(subcommand)] command: Commands, #[arg(long, value_enum, default_value_t = SizeUnit::MB)] unit: SizeUnit, }
+
+#[derive(Subcommand)] enum Commands { Encrypt { #[arg(short, long)] input: PathBuf, #[arg(short, long)] output: 
+
+PathBuf, #[arg(short, long)] seed: String, #[arg(short = 'C', long, default_value_t = 64)] chunk_size: u64, }, Decrypt { #[arg(short, long)] input: PathBuf, #[arg(short, long)] output: PathBuf, #[arg(short, long)] seed: String, }, }
+
+#[derive(Copy, Clone, ValueEnum)] enum SizeUnit { KB, MB, GB, }
+
+struct TranscendentalEngine { digits: Vec, chunk_size: usize, }
+
+impl TranscendentalEngine { fn new(seed: &str, chunk_size: u64, unit: SizeUnit) -> Self { let multiplier = match unit { SizeUnit::KB => 1024, SizeUnit::MB => 1024 * 1024, SizeUnit::GB => 1024 * 1024 * 1024, }; let bytes = chunk_size.saturating_mul(multiplier) as usize;
+
+
+let mut hasher = Sha256::new(); hasher.update(seed.as_bytes()); let hash = hasher.finalize(); // r in (0.09, 0.99) let r = { let int = Integer::from_digits(&hash[0..16], rug::integer::Order::LsfLe); let f = int.to_f64().unwrap(); Float::with_val(PRECISION, (f % 0.9) + 0.09) }; let omega = { let int = Integer::from_digits(&hash[16..32], rug::integer::Order::LsfLe); let f = int.to_f64().unwrap(); Float::with_val(PRECISION, f % 1e6) }; let phi = { let int = Integer::from_digits(&hash[32..48], rug::integer::Order::LsfLe); let f = int.to_f64().unwrap(); Float::with_val(PRECISION, f % std::f64::consts::PI) }; // Transcendental digit generation let mut digits = Vec::with_capacity(bytes); let mut x = 
+
+Float::with_val(PRECISION, 0); let c = &Float::with_val(PRECISION, 1) - &r; for n in 0.. { // term = c * r^n * sin(n*omega + phi) let mut term = Float::with_val(PRECISION, 0); let rn = r.clone().pow(n as u32); let angle = Float::with_val(PRECISION, &omega * n + &phi); term.assign(&c * rn * angle.sin()); x += &term; let digit = (x.to_integer().unwrap().to_u8().unwrap() % 10) as u8; digits.push(digit); if digits.len() >= bytes { break; } } TranscendentalEngine { digits, chunk_size: bytes } } fn process<R: Read, W: Write>( &self, mut reader: R, mut writer: W, progress: &ProgressBar, ) -> io::Result<()> { let mut buffer = vec![0u8; self.chunk_size]; let mut key_iter = self.digits.iter().cycle(); loop { let bytes_read = reader.read(&mut buffer)?; if bytes_read == 0 { break; } let processed: Vec<u8> = buffer[..bytes_read] .iter() .zip(&mut key_iter) .map(|(b, k)| 
+
+b.wrapping_add(*k)) .collect(); writer.write_all(&processed)?; progress.inc(bytes_read as u64); } Ok(()) } 
+
+}
+
+fn split_and_process( input_path: &Path, output_dir: &Path, engine: &TranscendentalEngine, progress: &ProgressBar, ) -> io::Result<()> { let mut part_number = 0; let mut reader = BufReader::new(File::open(input_path)?);
+
+loop { let mut buffer = vec![0u8; engine.chunk_size]; let bytes_read = reader.read(&mut buffer)?; if bytes_read == 0 { break; } let part_name = format!( "{}{}.part{}", input_path.file_stem().unwrap().to_string_lossy(), "", part_number ); let output_path = output_dir.join(part_name); let writer = 
+
+BufWriter::new(File::create(&output_path)?); engine.process(Cursor::new(&buffer[..bytes_read]), writer, progress)?; progress.println(format!("🔖 Parça oluşturuldu: {:?}", output_path)); part_number += 1; } Ok(()) 
+
+}
+
+fn detect_parts(input_path: &Path) -> io::Result<Vec> { let stem = input_path.file_stem() .and_then(|s| s.to_str()) .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid file stem"))?; let dir = input_path.parent().unwrap_or(Path::new(".")); let mut parts: Vec = fs::read_dir(dir)? .filter_map(|e| e.ok().map(|e| e.path())) .filter(|p| p.file_name() .and_then(|n| n.to_str()) .map(|n| n.starts_with(&format!
+
+("{}", stem)) && n.contains(".part")) .unwrap_or(false) ) .collect(); parts.sort(); Ok(parts) }
+
+fn main() -> io::Result<()> { let cli = Cli::parse(); let progress = ProgressBar::new(0).with_style( ProgressStyle::default_bar() .template("[{elapsed}] {bar:40} {pos}/{len} ({eta})") .unwrap(), );
+
+match &cli.command { Commands::Encrypt { input, output, seed, chunk_size } => { let meta = fs::metadata(input)?; if meta.len() > 10 * 1024 * 1024 { let proceed = Confirm::new() .with_prompt("⚠️ Büyük dosya! Parçalara bölmek ister misiniz?") .interact()?; if !proceed { process::exit(1); } } let engine = TranscendentalEngine::new(seed, *chunk_size, cli.unit); if meta.len() as usize 
+
+> engine.chunk_size { split_and_process(input, output.parent().unwrap_or(Path::new(".")), &engine, &progress)?; } else { let infile = File::open(input)?; let outfile = File::create(output)?; engine.process(BufReader::new(infile), BufWriter::new(outfile), &progress)?; } progress.finish_with_message("✅ Şifreleme tamamlandı"); } Commands::Decrypt { input, output, seed } => { let parts = detect_parts(input)?; let engine = TranscendentalEngine::new(seed, 0, cli.unit); let mut outfile = BufWriter::new(File::create(output)?); for part in parts { let mut infile = BufReader::new(File::open(&part)?); engine.process(&mut infile, &mut outfile, &progress)?; progress.println(format!("📦 Parça işlendi: {:?}", part)); } progress.finish_with_message("✅ Deşifre 
+
+tamamlandı"); } } Ok(()) 
+
+}
