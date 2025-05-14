@@ -1,4 +1,0 @@
-cargo:rustc-link-arg=-static
-cargo:rustc-link-search=native=.
-cargo:rustc-flags=-Crelocation-model=static
-cargo:rustc-link-arg=-Bstatic

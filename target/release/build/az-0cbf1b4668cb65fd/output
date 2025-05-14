@@ -1,6 +1,0 @@
-$ mkdir -p "/home/runner/workspace/target/release/build/az-0cbf1b4668cb65fd/out/try_track_caller"
-$ cd "/home/runner/workspace/target/release/build/az-0cbf1b4668cb65fd/out/try_track_caller"
-$ printf '%s' "// try_tra"... > "/home/runner/workspace/target/release/build/az-0cbf1b4668cb65fd/out/try_track_caller/try_track_caller.rs"
-$ cd "/home/runner/workspace/target/release/build/az-0cbf1b4668cb65fd/out/try_track_caller" && "rustc" "try_track_caller.rs" "--emit=dep-info,metadata" >& /dev/null
-cargo:rustc-cfg=track_caller
-$ rm -r "/home/runner/workspace/target/release/build/az-0cbf1b4668cb65fd/out/try_track_caller"
